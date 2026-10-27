@@ -1,0 +1,11 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+data/
+logs/
+.ssh/
+*.pem
+debug.log
+*.log

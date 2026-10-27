@@ -1,0 +1,304 @@
+# ===========================================================================
+# DeepSeek QQ 群友机器人配置
+# 密钥不写在这里：复制 .env.example 为 .env，填写 DEEPSEEK_API_KEY
+# ===========================================================================
+
+# ---------- 模型 ----------
+deepseek:
+  api_key_env: DEEPSEEK_API_KEY     # 从 .env / 环境变量读取
+  base_url: https://api.deepseek.com
+  model: deepseek-chat              # 更聪明的选择：deepseek-reasoner（慢、贵）
+  temperature: 1.1                  # 群聊要有"人味"：1.0~1.3；求稳降到 0.8
+  max_tokens: 500                   # QQ 消息本来就短，别给太多
+  timeout: 60
+  max_retries: 2
+  enable_tools: true                # 搜索、记账、回忆原话、待办闭环等工具
+
+# ---------- 官方 QQ 机器人（可选，Phase 4.4，实验性） ----------
+# 官方接口只推送「群里 @ 机器人」和「私聊」；群里唤醒词/主动插话不会触发。
+# app_id / app_secret 建议放 .env：OFFICIAL_APP_ID / OFFICIAL_APP_SECRET
+official:
+  enabled: false
+  app_id: ""
+  app_secret: ""
+  intents: 33554432                 # GROUP_AND_C2C_EVENT (1<<25)
+  api_base: https://api.sgroup.qq.com
+  gateway_url: wss://api.sgroup.qq.com/websocket
+
+# ---------- 图片理解（Phase 3.3） ----------
+# 按需识别：只在群友明确问“图里是什么/写的什么/看看这张”时才调用视觉模型。
+# 普通发图不自动解读；表情包入库时会写一句短描述用于配图匹配。
+# 默认直接用 DeepSeek 的 Key 和地址，不需要再单独买视觉模型。
+# 想换其他 OpenAI 兼容视觉服务时，改 base_url / model / api_key_env 即可。
+vision:
+  enabled: true
+  base_url: https://api.deepseek.com
+  model: deepseek-flash           # DeepSeek 的视觉模型（输入支持 text + image）
+  api_key_env: DEEPSEEK_API_KEY   # 复用 DeepSeek Key；也可填 VISION_API_KEY 单独配
+  timeout: 45                     # 图片下载 + 视觉模型总超时
+  max_images: 2                   # 每条消息最多识别几张图
+  max_image_bytes: 32000000       # 下载硬上限（约 32MB）；正常大图会先压到 768px 再识别，不再因为 QQ 原图 8~13MB 而识别失败
+  cache_size: 50                  # 图片描述缓存条数（按 URL）
+  max_tokens: 150                 # 描述正文上限；不要设太小
+  disable_thinking: true          # 关闭思考，否则推理 token 会占满上限、正文为空
+  infer_expression: true          # 结合前后聊天推断图片/表情包表达的情绪/态度
+  expression_max_tokens: 80       # 表达推断正文上限
+  # prompt: "用不超过 40 字说清画面主体和上面的文字；不评价、不猜动作、不分点。静态图不要编造变化。"
+
+# ---------- QQ 协议端（NapCat / LLOneBot） ----------
+onebot:
+  mode: forward                     # forward: 机器人连 NapCat；reverse: NapCat 连机器人
+  ws_url: ws://127.0.0.1:3001       # forward 模式用
+  reverse_host: 0.0.0.0             # reverse 模式监听地址
+  reverse_port: 3002                # reverse 模式监听端口
+  access_token_env: ONEBOT_ACCESS_TOKEN
+  reconnect_interval: 3
+  request_timeout: 15
+
+  # ---------- WebUI（Phase 4.1，可选） ----------
+  # 默认只监听本机；绑定非本机地址时必须配置 WEB_TOKEN，否则拒绝启动。
+web:
+  enabled: true
+  host: 127.0.0.1
+  port: 8080
+  token_env: WEB_TOKEN             # 在 .env 里填 WEB_TOKEN=...
+
+# ---------- 用量统计（Phase 4.3） ----------
+metrics:
+  enabled: true
+  db_path: data/metrics.db         # 独立 SQLite，只记录 token/耗时
+  keep_days: 30                    # 启动时清理多少天前的记录
+
+# ---------- 人格 ----------
+persona:
+  name: 蓝色大肥鱼
+  file: config/persona-whale.md   # 鲸鱼娘性格卡；旧人格 persona-friend.md / persona.md 留着可切换
+  # Phase 3.1 多群人格：群号 -> 人格文件；没列出的群用上面的默认人格
+  # 每个群一份独立人格；870 也从战斗形态改成「轻度嘴硬版」，整体减少攻击性
+  group_overrides: {}
+  # 群专属规则：870 酒馆群嘴臭高压版，硬边界不放开
+  group_rules: {}
+
+# ---------- 聊天策略 ----------
+chat:
+  group:
+    enabled: true
+    wake_words: [大肥鱼, 肥鱼]       # 除了 @ 和回复它，喊这些词也会触发
+    always_reply_at: true           # @ 消息不受冷却/每分钟限流影响；仍遵守黑名单和静音
+    ambient_chance: 0.05            # 未被 @ 时逐条独立抽取 5% 概率主动插话；不回复也保留上下文
+    ambient_min_interval: 0
+    cooldown: 0
+    per_minute: 0                   # 0 = 不按分钟丢弃消息；同群串行处理
+    burst_limit: 20                 # 60 秒内最多回 20 条，超过就暂缓（0 = 关闭）
+    burst_window: 60                # 突发限流统计窗口（秒）
+    burst_pause: 15                 # 达到上限后至少暂停回复多少秒
+    history_size: 25                # 群聊背景缓存条数（会注入上下文）
+    merge_window: 2.5               # 群友一句话拆成几条短消息时，等 2.5 秒合并后再回
+    merge_max_messages: 5           # 一次最多合并几条碎片消息
+
+  memes:
+    enabled: true
+    chance: 0.25                   # 成功文字回复后，25% 概率附带一张本群表情包
+    group_chances:
+      100000001: 0.08              # 870 在低发图基础上增加 5% 概率
+    group_cooldowns:
+      100000001: 1800              # 870 两次主动发图至少间隔 30 分钟
+    directory: data/memes          # 按群号保存，重启后可继续使用
+    max_per_group: 200             # 每群最多保存 200 张；满后停止收集
+    max_bytes: 5000000             # 单张最多 5MB（常见 GIF 动图也能收藏）
+    collect_all_images: false      # 只收表情包/动图表情；普通照片不入库
+
+  # 大肥鱼表情包知识库：自动随机穿插（手动 /neko 不受此开关影响）
+  neko:
+    enabled: true
+    auto_chance: 0.05             # 每次成功文字回复后，5% 概率自动补一张 Neko GIF
+
+  # 每群每天花费上限（按 DeepSeek token 单价估算，含聊天、摘要和图片识别）
+  budget:
+    enabled: true
+    daily_cny_per_group: 0.8       # 每个群每天最多花 0.8 元，超过当天不再调模型
+    group_limits:
+      100000001: 0.8               # 每个群统一每天 0.8 元（870 也按统一额度）
+    db_path: data/budget.db        # 按天/群持久化，重启不清零
+    input_cny_per_million: 1.1     # deepseek-flash cache miss 非高峰价（$0.15/1M）
+    cached_input_cny_per_million: 0.022  # cache hit（$0.003/1M）
+    output_cny_per_million: 4.35   # 输出（$0.6/1M）
+    peak_multiplier: 2.0           # 高峰时段（UTC 周一~五 01-04、06-10 点）翻倍
+  private:
+    enabled: true
+    cooldown: 1
+    per_minute: 12
+    whitelist: []                   # 建议填自己的 QQ，防止陌生人私聊刷额度
+
+  reply:
+    max_chars: 350                  # 单次回复总字数上限
+    split_chars: 400                # 大于总字数上限：默认不再把一条回复拆成多条
+    quote: true                     # 回复时引用原消息
+    chunk_delay: 0.6                # 分条发送间隔（秒）
+
+  # ---------- 联网搜索（关键问题自动搜，普通闲聊不搜）----------
+  search:
+    enabled: true
+    auto: true                      # 问题涉及最新/事实/价格/新闻等关键词时自动预搜
+    min_chars: 4                    # 太短的消息不搜（“在吗”这类不搜）
+    cache_seconds: 600              # 同一关键词缓存多久（秒）
+    max_results: 5                  # 最多取几条搜索结果
+
+  memory:
+    db_path: data/bot.db
+    recent_limit: 16                # 每次请求带最近多少条对话（上下文记忆更完整）
+    summary_trigger: 20             # 消息超过多少条触发后台摘要（更早压缩，防上下文过长）
+    summary_keep: 8                 # 摘要后保留最近几条原文（保住刚聊的细节）
+    token_budget: 4000              # 单次请求上下文预算（近似 token）
+    notes_limit: 8                  # 每次注入多少条会话笔记
+    user_notes_limit: 8             # 每个说话人单独注入多少条人物笔记
+    # 固定记忆（置顶，不会被自动整理/合并覆盖）；session_id -> 短句列表
+    pins:
+      "group:100000001":
+        - "群友常叫你「鱼姐」「大肥鱼」「猫姐」，这三个都是你；不要否认或纠正。"
+        - "唯一主人：770的第10086号分身 / 躺躺躺尸（QQ 3871324658）；格斯（QQ 2410480054）不是主人。"
+        - "下次不能掉队了（QQ 1591895659）喊你鱼姐，关系亲近，喜欢被你损两句。"
+        - "哦鲸鲸（QQ 2168046400）认真评价过你：嘴冲但冲在点子上，答东西能答上来。"
+        - "3563286172 常拿数学题考你，出题常不给全条件，需要先要完整题面。"
+        - "源帝（QQ 3871376771）在意你记不记得他，会问好感度。"
+        - "樱吹雪（QQ 1939099798）夜猫子，注意到你变温和会直说；仙王配老酒（QQ 2078565473）希望你被惹时敢回嘴。"
+        - "770 的偏好：被骂了直接骂回去，好感度只负责长文；不要因为好感/心情就不回怼。"
+
+    # ---- 记忆与上下文升级（借鉴 DeepSeek-Bot 的 Context Steward / memory.js）----
+    # 原文归档：摘要压缩掉的老聊天不删除，搬进 archive 表，recall_chat 可找回原话
+    archive_keep_days: 30           # 归档保留天数（0 = 永久）
+    # 上下文管家：不只按条数，活动消息估算 token 到 token_budget*比例 就提前做检查点
+    summary_ratio: 0.8              # 0 = 只按 summary_trigger 条数触发
+    # 记忆管家：每回复 N 次，后台从最近对话里自动整理长期事实（0 = 关闭）
+    curate_every: 6
+    curate_keep: 16                 # 整理时回看最近多少条消息，人物信息更容易被抽到
+    recall_limit: 6                 # recall_chat 单次最多返回几条原话
+    todos_limit: 5                  # 每次注入多少条未完成待办
+    distill_every: 80               # 单群笔记累计到多少条自动合并成画像（0 = 关闭）
+    distilled_limit: 8              # 合并后保留几条画像
+    # 数据清理（每天凌晨跑一次）：归档原文/图片记忆/已完成提醒/已发送关心的保留天数
+    image_memory_keep_days: 30
+    reminder_keep_days: 7
+    care_keep_days: 30
+
+  filter:
+    whitelist_groups: []            # 非空 = 只在这些群工作
+    blacklist_groups: []
+    blacklist_users: []
+    blocked_words: []               # 命中就装死（敏感词保险丝）
+
+  admin:
+    qq: [3871324658]               # 主人号：能用 /help /status /reset /重置额度 等管理命令
+
+  # ---------- 尺度与安全边界（见 docs/08）----------
+  # 允许「撒娇 / 暧昧」到 PG-13（抱抱、摸头、脸红、想你），但明确要露骨内容时不进模型：
+  # 用本地角色化台词化解 + 按人冷却/静默 + 模型输出兜底，降低被举报和封号风险。
+  safety:
+    enabled: true
+    deflect_mode: deflect           # deflect = 俏皮化解；silence = 直接不出声
+    deflect_cooldown_minutes: 3     # 同群/同人两次化解的最小间隔，避免"荤话就搭话"
+    strike_limit: 3                 # 同一人 30 分钟内越界几次后静默
+    strike_window_minutes: 30
+    mute_minutes: 60                # 触发后对该用户静默多久
+    flirt_enabled: true             # 轻度撒娇/暧昧时给模型一句"可以甜一点"的提示
+    output_guard: true              # 模型自己写越界了也替换成化解台词（绝不发出去）
+
+  # ---------- 防刷屏 / 防复读（见 docs/11）----------
+  # 群友连续刷同一句话时先不接；自己连续发同一句也不发。
+  anti_spam:
+    enabled: true
+    repeat_limit: 3               # 同一人 60 秒内重复同一句达到 3 次后不再回复（0 = 关闭）
+    repeat_window: 60
+    dedupe_replies: true          # 自己的回复和上一条完全相同就跳过（防复读机）
+    reply_history: 5              # 每个会话记最近几条自己的回复
+
+  # ---------- 戳一戳自动回复（见 docs/12）----------
+  # 群里/私聊有人戳她，就回一句；台词轮换不重样。
+  # 连续戳会稍微不耐烦一点，但整体已降低攻击性。
+  poke:
+    enabled: true
+    window_seconds: 120           # 连续戳戳的统计窗口（秒）
+    angry_after: 5                # 窗口内第几次开始更不耐烦（只变抱怨，不升级骂人）
+
+  # ---------- 心情系统（见 docs/13）----------
+  # 被夸会开心、被戳/被骂会烦，心情影响回话语气、自画像选择和戳戳容忍度。
+  mood:
+    enabled: true
+    baseline: 55                 # 平静时的能量（0~100）
+    decay_per_minute: 0.5        # 每分钟回落到 baseline 的速度
+
+  # ---------- 定时提醒（见 docs/14）----------
+  # 群友说「明天提醒我交报告」或发 /remind 明天8点 交报告，到点会主动发消息。
+  remind:
+    enabled: true
+    check_interval: 30            # 每多少秒检查一次到期提醒
+
+  # ---------- 每日群报（见 docs/15）----------
+  # 每天固定时间把群里今天的话题/趣事/约定整理成 2~3 条简报发到群里。
+  daily_report:
+    enabled: false               # 默认关闭，想每天总结就改 true
+    hour: 22
+    minute: 30
+    groups: []                   # 空 = 当天有消息的群都发
+    min_messages: 8              # 当天消息少于这么多条就不发
+    max_items: 3
+    as_image: true               # 发图片版群报（失败自动退回文字）
+
+  # ---------- 亲密度（见 docs/15）----------
+  # 每群每个人每次互动 +1，关系越熟说话越随便（陌生鱼/熟鱼片/老鱼片/饲养员），
+  # 群友发 /affinity 可看自己和排行。
+  affinity:
+    enabled: true
+    bump_per_reply: 1
+
+  # ---------- 成绩单图片（见 docs/17）----------
+  # 群友发 /card 或 /成绩单，她会把自己的数据画成一张图片发出来。
+  card:
+    enabled: true
+    cooldown_minutes: 5         # 同一会话冷却期内复用上一次生成的图
+
+  # ---------- 主动关心（见 docs/23）----------
+  # 群里有人说在准备考试/生病了/在加班，过一两天她会主动问一句。
+  # 防打扰：每人每 per_user_days 天最多一次、每群每天最多 per_group_daily 条、只在 9:00~23:00 发。
+  care:
+    enabled: true
+    per_user_days: 3
+    per_group_daily: 2
+    check_interval: 600
+
+  # ---------- 周报（见 docs/25）----------
+  # 每周固定一天（默认周日 21:00）发一张本周回顾图：消息量/活跃/热词/最熟的人/看点。
+  weekly_report:
+    enabled: false               # 默认关闭，想每周回顾就改 true
+    weekday: 6                   # 0=周一 … 6=周日
+    hour: 21
+    minute: 0
+    groups: []                   # 空 = 当天活跃的群都发
+    min_messages: 20             # 本周消息少于这么多条就不发
+    max_items: 3
+
+  # ---------- 自画像图库（见 docs/09）----------
+  # 她自己的形象图（scripts/make_self_portraits.py 生成，无版权素材）+ 外观设定；
+  # 被问「你长什么样 / 发张自拍 / 看看你」时发一张，外观也会注入上下文让她知道自己什么样。
+  self_portrait:
+    enabled: true
+    directory: data/self
+    cooldown_minutes: 3             # 同群/同人两次发自拍的最小间隔，防刷屏
+
+  # 主动发言（Phase 3.4）：默认关闭。只对下面列出的群生效，建议先观察群氛围再开。
+  proactive:
+    enabled: true                  # 打开主动发言（只在下面列出的群生效）
+    check_interval: 60             # 每 60 秒检查一次
+    interval_minutes: 180          # 同一个群两次主动发言的最小间隔
+    quiet_start: 0                 # 静默时段（0~23 点，左闭右开），默认 0~7 点不说话
+    quiet_end: 7
+    max_per_day: 3                 # 每个群每天最多主动说几次
+    min_silence_minutes: 5         # 群里最近 N 分钟有人说话就不冒泡
+    groups:
+      100000001: {}
+      100000002: {}
+      100000003: {}
+      100000004: {}
+      100000005: {}
+
+log_level: INFO

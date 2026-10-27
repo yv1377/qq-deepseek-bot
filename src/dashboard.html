@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🐟 大肥鱼 · 成绩单</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 18px 40px;
+    font-family: "Microsoft YaHei", system-ui, sans-serif;
+    background: radial-gradient(circle at 20% 0%, #12365c 0%, #071426 55%, #040b16 100%);
+    color: #dbe9f8; min-height: 100vh;
+  }
+  header {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 18px 0 10px; border-bottom: 1px solid #1d3a5c;
+  }
+  h1 { font-size: 20px; margin: 0; }
+  .muted { color: #7f9ab8; font-size: 12px; }
+  a { color: #8fd0f5; text-decoration: none; }
+  input { background: #0d1f36; border: 1px solid #24486f; color: #dbe9f8;
+          padding: 6px 8px; border-radius: 6px; }
+  button { background: #1d4f7f; border: 0; color: #eaf4ff; padding: 6px 12px;
+           border-radius: 6px; cursor: pointer; }
+  button:hover { background: #28679f; }
+  button.ghost { background: #12283f; border: 1px solid #24486f; }
+  main { max-width: 1180px; margin: 0 auto; display: grid;
+         grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-top: 16px; }
+  .card { background: #0b1c31ee; border: 1px solid #1d3a5c; border-radius: 12px;
+          padding: 14px 16px; box-shadow: 0 8px 24px #02070f66; }
+  .card h2 { font-size: 14px; margin: 0 0 10px; color: #9cc7ee; letter-spacing: .5px; }
+  .wide { grid-column: 1 / -1; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+  .kv { background: #0f2743; border-radius: 8px; padding: 8px 10px; }
+  .kv .label { font-size: 11px; color: #7f9ab8; }
+  .kv .value { font-size: 18px; font-weight: 600; color: #eaf4ff; margin-top: 2px; }
+  .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; }
+  .bar { flex: 1; height: 8px; border-radius: 4px; background: #12283f; overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 4px;
+             background: linear-gradient(90deg, #38a3e8, #9be3ff); }
+  .tag { font-size: 12px; color: #a9c4dd; }
+  .cloud { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; padding: 6px 0; }
+  .cloud span { line-height: 1.1; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid #162c45; text-align: left; }
+  th { color: #7f9ab8; font-weight: 500; }
+  .err { color: #ff9d9d; font-size: 12px; min-height: 16px; }
+  .bars { display: flex; align-items: flex-end; gap: 10px; padding: 8px 2px 2px; }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+  .colbar { width: 70%; max-width: 46px; border-radius: 5px 5px 2px 2px;
+            background: linear-gradient(180deg, #9be3ff, #2874a6); min-height: 4px; }
+  .colnum { font-size: 12px; color: #dbe9f8; }
+  .colday { font-size: 11px; color: #7f9ab8; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px;
+          background: #12365c; font-size: 11px; color: #9cc7ee; margin-left: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🐟 大肥鱼 · 成绩单</h1>
+  <a href="/" class="muted">← 控制台</a>
+  <span class="muted">令牌</span>
+  <input id="token" type="password" placeholder="WEB_TOKEN" style="width:160px">
+  <button onclick="saveToken()">保存</button>
+  <button onclick="load()">刷新</button>
+  <span id="hint" class="muted"></span>
+  <span id="updated" class="muted"></span>
+</header>
+
+<main>
+  <section class="card wide">
+    <h2>今日概览</h2>
+    <div class="grid" id="overview"></div>
+    <div class="err" id="error"></div>
+  </section>
+
+  <section class="card">
+    <h2>心情</h2>
+    <div id="mood"></div>
+  </section>
+
+  <section class="card">
+    <h2>亲密度排行</h2>
+    <div id="affinity"></div>
+  </section>
+
+  <section class="card">
+    <h2>记忆规模</h2>
+    <div class="grid" id="memory"></div>
+  </section>
+
+  <section class="card">
+    <h2>图库</h2>
+    <div class="grid" id="gallery"></div>
+  </section>
+
+  <section class="card wide">
+    <h2>近 7 天活跃</h2>
+    <div id="activity" class="bars"></div>
+  </section>
+
+  <section class="card wide">
+    <h2>本群热点词（近 7 天）</h2>
+    <div id="cloud" class="cloud"></div>
+  </section>
+
+  <section class="card">
+    <h2>今日预算</h2>
+    <div id="budget"></div>
+  </section>
+
+  <section class="card wide">
+    <h2>近 7 天用量</h2>
+    <div id="usage"></div>
+  </section>
+
+  <section class="card">
+    <h2>群报</h2>
+    <div class="row">
+      <input id="report-group" placeholder="群号" style="width:150px">
+      <button onclick="sendReport()">立刻生成群报</button>
+    </div>
+    <div id="report-hint" class="muted" style="margin-top:6px"></div>
+  </section>
+
+  <section class="card wide">
+    <h2>待办提醒</h2>
+    <div class="grid" id="reminders"></div>
+    <div id="reminder-list"></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let token = localStorage.getItem("dsh_web_token") || "";
+$("token").value = token;
+
+function saveToken() {
+  token = $("token").value.trim();
+  localStorage.setItem("dsh_web_token", token);
+  $("hint").textContent = "已保存";
+  load();
+}
+
+async function api(path, options = {}) {
+  const headers = Object.assign({}, options.headers || {});
+  if (token) headers["Authorization"] = "Bearer " + token;
+  const resp = await fetch(path, Object.assign({}, options, { headers }));
+  if (resp.status === 401) throw new Error("token 无效，请在上方填写 WEB_TOKEN");
+  if (!resp.ok) throw new Error("HTTP " + resp.status);
+  return resp.json();
+}
+
+function kv(label, value) {
+  return `<div class="kv"><div class="label">${label}</div><div class="value">${value}</div></div>`;
+}
+
+function fmtUptime(sec) {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  return h > 0 ? `${h}h${m}m` : `${m}m`;
+}
+
+function renderOverview(d) {
+  const s = d.status.stats;
+  $("overview").innerHTML = [
+    kv("运行时长", fmtUptime(d.status.uptime_seconds)),
+    kv("收到消息", s.received), kv("已回复", s.replied),
+    kv("跳过", s.skipped), kv("出错", s.errors),
+    kv("戳戳回复", s.pokes || 0), kv("防刷屏", s.suppressed || 0),
+    kv("模型", d.status.model),
+    kv("协议端", d.status.safety && d.status.model ? "已配置" : "-"),
+  ].join("");
+}
+
+function renderMood(d) {
+  const states = (d.status.mood && d.status.mood.states) || {};
+  const keys = Object.keys(states);
+  if (!keys.length) { $("mood").innerHTML = `<div class="muted">还没有心情记录</div>`; return; }
+  $("mood").innerHTML = keys.map((key) => {
+    const st = states[key];
+    const group = key.split(":").pop();
+    const pct = Math.max(0, Math.min(100, st.energy));
+    return `<div class="row"><span class="tag" style="min-width:96px">群 ${group}</span>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <span class="tag">${st.energy} ${st.label}</span></div>`;
+  }).join("");
+}
+
+function renderAffinity(d) {
+  const groups = d.affinity || {};
+  const keys = Object.keys(groups);
+  if (!keys.length) { $("affinity").innerHTML = `<div class="muted">还没有互动记录</div>`; return; }
+  $("affinity").innerHTML = keys.map((gid) => {
+    const items = groups[gid].map((it) =>
+      `<div class="row"><span class="tag">${it.name}</span>
+       <span class="pill">${it.level}</span>
+       <span class="tag" style="margin-left:auto">${it.score}</span></div>`).join("");
+    return `<div style="margin-bottom:10px"><div class="muted">群 ${gid}</div>${items}</div>`;
+  }).join("");
+}
+
+function renderMemory(d) {
+  const m = d.memory || {};
+  $("memory").innerHTML = [
+    kv("消息", m.messages ?? 0), kv("归档原文", m.archive ?? 0),
+    kv("笔记", m.notes ?? 0), kv("画像", m.portraits ?? 0),
+    kv("待办", m.todos ?? 0), kv("活跃会话", m.sessions ?? 0),
+  ].join("");
+}
+
+function renderGallery(d) {
+  const sp = d.status.self_portrait || {};
+  $("gallery").innerHTML = [
+    kv("自画像", (sp.count ?? 0) + " 张"),
+    kv("表情包", (d.gallery && d.gallery.memes) ?? 0),
+    kv("磁盘", ((d.gallery && d.gallery.bytes_mb) ?? 0) + " MB"),
+  ].join("");
+}
+
+function renderCloud(d) {
+  const items = d.word_cloud || [];
+  if (!items.length) { $("cloud").innerHTML = `<div class="muted">最近群里话太少，没词</div>`; return; }
+  const max = Math.max(...items.map((it) => it.count));
+  const palette = ["#9be3ff", "#7fc4ef", "#a8d8ff", "#8fd0f5", "#c8e9ff", "#6fb6e8"];
+  $("cloud").innerHTML = items.map((it, idx) => {
+    const size = 12 + Math.round((it.count / max) * 26);
+    const color = palette[idx % palette.length];
+    return `<span style="font-size:${size}px;color:${color}" title="${it.count} 次">${it.word}</span>`;
+  }).join("");
+}
+
+function renderBudget(d) {
+  const budget = (d.status.budget && d.status.budget.today) || {};
+  const keys = Object.keys(budget);
+  if (!keys.length) { $("budget").innerHTML = `<div class="muted">今天还没花钱</div>`; return; }
+  const limit = d.status.budget.daily_cny_per_group || 0;
+  $("budget").innerHTML = keys.map((gid) => {
+    const cny = budget[gid];
+    const pct = limit > 0 ? Math.min(100, (cny / limit) * 100) : 0;
+    return `<div class="row"><span class="tag" style="min-width:96px">群 ${gid}</span>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <span class="tag">${cny} / ${limit} 元</span></div>`;
+  }).join("");
+}
+
+function renderUsage(d) {
+  const days = (d.usage_days || []).slice().reverse();
+  if (!days.length) { $("usage").innerHTML = `<div class="muted">还没有用量记录</div>`; return; }
+  const rows = days.map((day) => {
+    const when = new Date((day.ts || 0) * 1000).toLocaleDateString("zh-CN");
+    return `<tr><td>${when}</td><td>${day.calls ?? 0}</td>
+      <td>${(day.total_tokens ?? 0).toLocaleString()}</td>
+      <td>${day.avg_duration_ms ?? 0} ms</td></tr>`;
+  }).join("");
+  $("usage").innerHTML = `<table><thead><tr><th>日期</th><th>调用</th><th>tokens</th><th>平均耗时</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+function renderActivity(d) {
+  const days = d.activity_days || [];
+  if (!days.length) { $("activity").innerHTML = `<div class="muted">还没有数据</div>`; return; }
+  const peak = Math.max(...days.map((x) => x.count), 1);
+  $("activity").innerHTML = days.map((item) => {
+    const height = Math.max(4, Math.round((item.count / peak) * 90));
+    return `<div class="col" title="${item.count} 条">
+      <div class="colbar" style="height:${height}px"></div>
+      <div class="colnum">${item.count}</div>
+      <div class="colday">${item.day.slice(5)}</div></div>`;
+  }).join("");
+}
+
+function renderReminders(d) {
+  const info = d.reminders || {};
+  const items = info.items || [];
+  $("reminders").innerHTML = kv("未完成提醒", info.pending || 0);
+  if (!items.length) { $("reminder-list").innerHTML = ""; return; }
+  $("reminder-list").innerHTML = `<div style="margin-top:8px">` + items.map((item) =>
+    `<div class="row">
+       <span class="tag">#${item.id}</span>
+       <span class="tag">${item.due}</span>
+       <span class="tag" style="flex:1">${item.content}</span>
+       <button class="ghost" onclick="cancelReminder(${item.id})">取消</button>
+     </div>`).join("") + `</div>`;
+}
+
+async function sendReport() {
+  const groupId = $("report-group").value.trim();
+  if (!groupId) { $("report-hint").textContent = "先填群号"; return; }
+  $("report-hint").textContent = "生成中…";
+  try {
+    const result = await api("/api/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ group_id: Number(groupId) }),
+    });
+    $("report-hint").textContent = result.ok
+      ? "已发送到群 " + groupId
+      : "今天消息太少或被静音，没发";
+    load();
+  } catch (err) {
+    $("report-hint").textContent = "失败：" + err.message;
+  }
+}
+
+async function cancelReminder(id) {
+  try {
+    await api("/api/reminders/" + id + "/cancel", { method: "POST" });
+    load();
+  } catch (err) {
+    $("error").textContent = "取消失败：" + err.message;
+  }
+}
+
+function render(d) {
+  renderOverview(d);
+  renderMood(d);
+  renderAffinity(d);
+  renderMemory(d);
+  renderGallery(d);
+  renderCloud(d);
+  renderActivity(d);
+  renderBudget(d);
+  renderUsage(d);
+  renderReminders(d);
+  $("updated").textContent = "更新于 " + new Date().toLocaleTimeString("zh-CN");
+  $("error").textContent = "";
+}
+
+async function load() {
+  try {
+    const data = await api("/api/dashboard");
+    render(data);
+  } catch (err) {
+    $("error").textContent = "加载失败：" + err.message;
+  }
+}
+
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>

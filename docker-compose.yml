@@ -1,0 +1,59 @@
+# Docker Compose：bot + NapCatQQ 一键启动（Phase 4.2）
+#
+# 用法：
+#   1. Copy-Item .env.example .env，填 DEEPSEEK_API_KEY / WEB_TOKEN / ONEBOT_ACCESS_TOKEN
+#   2. config/config.yaml 里把 web.enabled 改成 true（想用 WebUI 的话）
+#   3. docker compose up -d --build
+#   4. 打开 http://127.0.0.1:6099 登录 NapCat，配置 WebSocket 服务器：0.0.0.0:3001 + token
+#   5. docker compose logs -f bot 看机器人日志
+#
+# 说明：bot 容器通过服务名 napcat 访问协议端，所以 ONEBOT_WS_URL 被覆盖成 ws://napcat:3001。
+
+name: deepseek-qq-bot
+
+services:
+  napcat:
+    image: mlikiowa/napcat-docker:latest
+    container_name: qq-napcat
+    restart: unless-stopped
+    environment:
+      - NAPCAT_UID=${NAPCAT_UID:-0}
+      - NAPCAT_GID=${NAPCAT_GID:-0}
+      - TZ=Asia/Shanghai
+    ports:
+      # 只把 WebUI 暴露到本机，避免公网直接摸到协议端
+      - "127.0.0.1:6099:6099"
+    volumes:
+      - ./napcat/config:/app/napcat/config
+      - ./napcat/qq:/app/.config/QQ
+    networks:
+      - botnet
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qq-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Shanghai
+      # 容器里不能用 127.0.0.1 找 NapCat，改用 compose 服务名
+      - ONEBOT_WS_URL=ws://napcat:3001
+      # WebUI 在容器内监听 0.0.0.0；必须配合 .env 里的 WEB_TOKEN 使用
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=8080
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    depends_on:
+      - napcat
+    networks:
+      - botnet
+
+networks:
+  botnet:
+    driver: bridge
